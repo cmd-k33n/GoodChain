@@ -574,19 +574,19 @@ class TxViewerWindow(ttk.Toplevel):
         self.tx_fee_label.pack()
 
         self.tx_sender_label = ttk.Label(self,
-                                         text=f"Sender: {self.tx.sender}",
-                                         wraplength=400
+                                         text=f"Sender: {self.tx.sender.hex()}",
+                                         wraplength=600
                                          )
         self.tx_sender_label.pack()
         self.tx_receiver_label = ttk.Label(self,
-                                           text=f"Receiver: {self.tx.receiver}",
-                                           wraplength=400
+                                           text=f"Receiver: {self.tx.receiver.hex()}",
+                                           wraplength=600
                                            )
         self.tx_receiver_label.pack()
 
         self.tx_sig_label = ttk.Label(self,
-                                      text=f"Signature: {self.tx.sig}",
-                                      wraplength=400,
+                                      text=f"Signature: {self.tx.sig.hex()}",
+                                      wraplength=600,
                                       bootstyle=tx_style
                                       )
         self.tx_sig_label.pack()
@@ -994,11 +994,13 @@ class UserViewer(ttk.Labelframe):
 
     def show_public_key(self):
         Messagebox.ok(title="Public Key",
-                      message=f"Public Key: {self.user.public_key}")
+                      message=f"Public Key: {self.user.public_key.hex()}")
 
     def show_private_key(self):
         Messagebox.ok(title="Private Key",
-                      message=f"Private Key: {self.user.private_key}")
+                      message=f"Private Key: {self.user.private_key.hex()}",
+                      width=200
+                      )
 
     def logout(self):
         result = self.node.logout()
@@ -1042,12 +1044,12 @@ class UserViewer(ttk.Labelframe):
         self.public_key_button = ttk.Button(self,
                                             text="Show Public Key",
                                             command=self.show_public_key,
-                                            bootstyle=PRIMARY
+                                            bootstyle=(INFO, OUTLINE)
                                             )
         self.private_key_button = ttk.Button(self,
                                              text="Show Private Key",
                                              command=self.show_private_key,
-                                             bootstyle=PRIMARY
+                                             bootstyle=(INFO, OUTLINE)
                                              )
         self.create_tx_button = ttk.Button(self,
                                            text="Create Transaction",
