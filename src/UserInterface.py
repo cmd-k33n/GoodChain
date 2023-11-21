@@ -793,7 +793,9 @@ class UserTxListViewer(ttk.Frame):
 
 class CreateTxWindow(ttk.Toplevel):
     def __init__(self, master, node: Node):
-        super().__init__(master, minsize=(600, 350))
+        super().__init__(master,
+                         title="Create Transaction",
+                         minsize=(600, 350))
         self.master = master
         self.node = node
 
@@ -804,6 +806,8 @@ class CreateTxWindow(ttk.Toplevel):
         self.password = ttk.StringVar(value="")
 
         self.create_widgets()
+
+        self.place_window_center()
 
     def create_widgets(self):
         self.to_label = ttk.Label(self, text="To")
@@ -865,7 +869,7 @@ class CreateTxWindow(ttk.Toplevel):
                                          self.output.get(),
                                          self.fee.get(),
                                          self.password.get(),
-                                         receiver.get_public_key()
+                                         receiver.get_public_key() if receiver is not None else None
                                          )
             if result == NodeActionResult.SUCCESS:
                 Messagebox.ok(title="Success",
@@ -873,11 +877,17 @@ class CreateTxWindow(ttk.Toplevel):
                 self.master.master.update_all_windows()
                 self.destroy()
             elif result == NodeActionResult.FAIL:
-                Messagebox.show_error("Transaction creation failed")
+                Messagebox.show_error(title="Failed",
+                                      message="Transaction creation failed",
+                                      parent=self)
             else:
-                Messagebox.show_error("Transaction invalid")
+                Messagebox.show_error(title="Invalid",
+                                      message="Transaction invalid",
+                                      parent=self)
         else:
-            Messagebox.show_error("Authorization failed")
+            Messagebox.show_error(title="Invalid",
+                                  message="Transaction invalid",
+                                  parent=self)
 
 
 class Login(ttk.Labelframe):

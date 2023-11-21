@@ -266,7 +266,7 @@ class Node:
         return NodeActionResult.INVALID
 
     def create_tx(self, input: float, output: float, fee: float, sender_password: str, receiver: rsa.RSAPublicKey):
-        if self.user_wallet.available >= input and isclose(input, fsum((output, fee))):
+        if self.user and self.user.authorize(sender_password) and self.user_wallet.available >= input and isclose(input, fsum((output, fee))):
             try:
                 sender_priv_key, sender_pub_key = self.user.get_rsa_keys(
                     sender_password)
