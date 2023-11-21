@@ -648,13 +648,13 @@ class PoolTxListViewer(ttk.Frame):
         for child in self.winfo_children():
             child.grid_configure(padx=5, pady=5)
 
-        self.columnconfigure(0, weight=1)
-        self.columnconfigure(1, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
         # self.columnconfigure(2, weight=1)
         # self.columnconfigure(3, weight=1)
         # self.rowconfigure(BUTTON_ROW, weight=1)
         # self.rowconfigure(BUTTON_ROW+1, weight=1)
-        self.rowconfigure(TREE_ROW, weight=10)
+        self.grid_rowconfigure(TREE_ROW, weight=10)
 
     def open_viewer(self):
         tx_hash = self.tree.selection()[0]
@@ -665,6 +665,7 @@ class PoolTxListViewer(ttk.Frame):
         result = self.node.cancel_tx(tx_hash)
         if result == NodeActionResult.SUCCESS:
             Messagebox.ok(title="Success", message="Transaction cancelled")
+            self.master.master.update_all_windows()
         elif result == NodeActionResult.FAIL:
             Messagebox.show_error("Cancel failed")
         else:
