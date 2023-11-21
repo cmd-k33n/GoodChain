@@ -144,6 +144,7 @@ class Node:
                 reward_tx.sign(priv_key)
                 reward_processed = self.pool.add_tx(reward_tx)
                 if user_added and reward_processed:
+                    self.auto_fill_rewards()
                     self.save_accounts()
                     self.save_pool()
                     return NodeActionResult.SUCCESS
@@ -191,6 +192,7 @@ class Node:
                                    )
                     reward_tx.sign(priv_key)
                     if self.pool.add_tx(reward_tx):
+                        self.auto_fill_rewards()
                         self.save_pool()
 
                 return NodeActionResult.SUCCESS
@@ -215,8 +217,30 @@ class Node:
                 return NodeActionResult.FAIL
         return NodeActionResult.INVALID
 
+    def auto_fill_rewards(self):
+        head = self.ledger.get_current_block()
+        if head.state() <= BlockState.READY:
+            pending_txs = self.pool.all_txs()
+            rewards = [tx for tx in pending_txs.values() if tx.type == REWARD]
+
+            r = 0
+
+            while len(head.txs) < 10:
+                if r < len(rewards):
+                    head.add_tx(self.pool.pop_tx(rewards[r].hash.hex()))
+                    r += 1
+                else:
+                    break
+
+            self.save_ledger()
+            self.save_pool()
+
+            return NodeActionResult.SUCCESS
+        return NodeActionResult.INVALID
+
     def auto_fill_block(self):
-        if self.curr_block.state() <= BlockState.READY:
+        head = self.ledger.get_current_block()
+        if head.state() <= BlockState.READY:
             pending_txs = self.pool.all_txs()
             rewards = [tx for tx in pending_txs.values() if tx.type == REWARD]
             payments = [tx for tx in pending_txs.values() if tx.type == NORMAL]
@@ -224,14 +248,12 @@ class Node:
             r = 0
             p = 0
 
-            while len(self.curr_block.txs) < 10:
+            while len(head.txs) < 10:
                 if r < len(rewards):
-                    self.curr_block.add_tx(
-                        self.pool.pop_tx(rewards[r].hash.hex()))
+                    head.add_tx(self.pool.pop_tx(rewards[r].hash.hex()))
                     r += 1
                 elif p < len(payments):
-                    self.curr_block.add_tx(
-                        self.pool.pop_tx(payments[p].hash.hex()))
+                    head.add_tx(self.pool.pop_tx(payments[p].hash.hex()))
                     p += 1
                 else:
                     break
@@ -257,10 +279,11 @@ class Node:
     def move_tx_from_current_block_to_pool(self, tx_hash: str):
         if self.curr_block.state() <= BlockState.READY:
             try:
-                self.pool.add_tx(self.curr_block.pop_tx_by_hash(tx_hash))
-                self.save_ledger()
-                self.save_pool()
-                return NodeActionResult.SUCCESS
+                if self.curr_block.get_tx(tx_hash).type == NORMAL:
+                    self.pool.add_tx(self.curr_block.pop_tx_by_hash(tx_hash))
+                    self.save_ledger()
+                    self.save_pool()
+                    return NodeActionResult.SUCCESS
             except:
                 return NodeActionResult.FAIL
         return NodeActionResult.INVALID
