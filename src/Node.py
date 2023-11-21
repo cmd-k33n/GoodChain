@@ -243,9 +243,10 @@ class Node:
         return NodeActionResult.INVALID
 
     def move_tx_from_pool_to_current_block(self, tx_hash: str):
-        if len(self.curr_block.txs) < 10:
+        head = self.ledger.get_current_block()
+        if len(head.txs) < 10 and head.state() <= BlockState.READY:
             try:
-                self.curr_block.add_tx(self.pool.pop_tx(tx_hash))
+                head.add_tx(self.pool.pop_tx(tx_hash))
                 self.save_ledger()
                 self.save_pool()
                 return NodeActionResult.SUCCESS
