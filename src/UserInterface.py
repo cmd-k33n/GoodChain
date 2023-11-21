@@ -317,11 +317,16 @@ class BlockViewer(ttk.Labelframe):
                                  subtext=f"{self.block.state().name}"
                                  )
 
-        self.mine_button = ttk.Button(master=self,
-                                      text="Mine",
-                                      command=self.try_mine_block,
-                                      bootstyle=tx_meter_style if self.node.user is not None else DISABLED
-                                      )
+        if self.node.user is not None and self.block.state() == BlockState.READY:
+            self.mine_button = ttk.Button(master=self,
+                                          text="Mine",
+                                          command=self.try_mine_block,
+                                          bootstyle=state_style
+                                          )
+            self.mine_button.grid(row=2, column=0,
+                                  columnspan=2,
+                                  sticky=(N, E, S, W)
+                                  )
 
         if self.block.previousBlock is not None:
             self.prev_block_button = ttk.Button(master=self,
@@ -350,16 +355,11 @@ class BlockViewer(ttk.Labelframe):
         self.state_label.grid(row=0, column=1,
                               sticky=(N, E, W))
 
-        self.tx_meter.grid(row=2, column=0,
+        self.tx_meter.grid(row=1, column=0,
                            sticky=(N, E, S, W))
 
-        self.state_meter.grid(row=2, column=1,
+        self.state_meter.grid(row=1, column=1,
                               sticky=(N, E, S, W))
-
-        self.mine_button.grid(row=1, column=1,
-                              columnspan=2,
-                              sticky=(N, E, S, W)
-                              )
 
         self.tx_frame.grid(row=5, column=0,
                            columnspan=2,
@@ -719,12 +719,14 @@ class BlockTxListViewer(ttk.Frame):
                                      )
             view_button.grid(row=4, column=0, sticky=(N, E, S, W))
 
-            move_to_pool_button = ttk.Button(self.master,
-                                             text="Move to Pool",
-                                             command=self.move_to_pool,
-                                             bootstyle=(WARNING, OUTLINE)
-                                             )
-            move_to_pool_button.grid(row=4, column=1, sticky=(N, E, S, W))
+            if self.node.curr_block.state() <= BlockState.READY:
+
+                move_to_pool_button = ttk.Button(self.master,
+                                                 text="Move to Pool",
+                                                 command=self.move_to_pool,
+                                                 bootstyle=(SUCCESS, OUTLINE)
+                                                 )
+                move_to_pool_button.grid(row=4, column=1, sticky=(N, E, S, W))
 
         self.tree.grid(row=1, column=0,
                        sticky=(N, E, S, W),
