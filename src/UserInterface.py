@@ -121,9 +121,9 @@ class MainFrame(ttk.Frame):
         self.grid_rowconfigure(10, weight=1)
         self.grid_rowconfigure(11, weight=1)
         self.grid_rowconfigure(12, weight=1)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
+        self.grid_columnconfigure(0, weight=2)
+        self.grid_columnconfigure(1, weight=2)
+        self.grid_columnconfigure(2, weight=2)
 
         for child in self.winfo_children():
             child.grid_configure(padx=20, pady=10)
@@ -144,7 +144,7 @@ class MainFrame(ttk.Frame):
                                 padx=20, pady=10
                                 )
 
-        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=2)
 
     def update_blockwindow(self):
         self.block_frame.destroy()
@@ -158,7 +158,7 @@ class MainFrame(ttk.Frame):
                               padx=20, pady=10
                               )
 
-        self.grid_columnconfigure(1, weight=1)
+        self.grid_columnconfigure(1, weight=2)
 
     def update_poolwindow(self):
         self.pool_frame.destroy()
@@ -172,7 +172,7 @@ class MainFrame(ttk.Frame):
                              padx=20, pady=10
                              )
 
-        self.grid_columnconfigure(2, weight=1)
+        self.grid_columnconfigure(2, weight=2)
 
     def update_all_windows(self):
         self.update_profilewindow()
@@ -269,7 +269,7 @@ class BlockViewer(ttk.Labelframe):
 
         state_style = (SUCCESS if block_state == BlockState.VALIDATED else
                        (SUCCESS, INVERSE) if block_state == BlockState.MINED else
-                       (PRIMARY, INVERSE) if block_state == BlockState.READY else
+                       (INFO) if block_state == BlockState.READY else
                        (WARNING, INVERSE))
 
         state_meter_style = (WARNING if block_state == BlockState.VALIDATED else
@@ -321,7 +321,7 @@ class BlockViewer(ttk.Labelframe):
             self.mine_button = ttk.Button(master=self,
                                           text="Mine",
                                           command=self.try_mine_block,
-                                          bootstyle=state_style
+                                          bootstyle=(SUCCESS, OUTLINE)
                                           )
             self.mine_button.grid(row=2, column=0,
                                   columnspan=2,
@@ -416,15 +416,15 @@ class PoolViewer(ttk.Labelframe):
 
 class MineBlockWindow(ttk.Toplevel):
 
-    threadqueue = Queue()
-
     def __init__(self, master: BlockViewer, node: Node):
         super().__init__(master, size=(600, 350))
+        self.title("Mine Block")
         self.master = master
         self.node = node
         self.message = ttk.StringVar(value="")
         self.password = ttk.StringVar(value="")
         self.create_widgets()
+        self.place_window_center()
 
     def create_widgets(self):
 
@@ -455,13 +455,12 @@ class MineBlockWindow(ttk.Toplevel):
 
         self.start_button = ttk.Button(container,
                                        text='START',
-                                       command=self.start_mining,
-                                       bootstyle=PRIMARY
+                                       command=self.start_task,
+                                       bootstyle=INFO
                                        )
 
         self.progressbar = ttk.Floodgauge(container,
-                                          maximum=25,
-                                          bootstyle=DEFAULT,
+                                          bootstyle=INFO,
                                           mode=INDETERMINATE
                                           )
 
@@ -505,20 +504,56 @@ class MineBlockWindow(ttk.Toplevel):
         for child in container.winfo_children():
             child.grid_configure(padx=5, pady=5)
 
-    def start_mining(self):
-        self.progressbar.start()
+    def start_task(self):
+        """Start the progressbar and run the task in another thread"""
         self.start_button.configure(state=DISABLED)
-        result = self.node.mine_block(self.password.get())
-        if result == NodeActionResult.SUCCESS:
-            self.message.set('Block successfully mined')
-            self.progressbar.configure(bootstyle=SUCCESS)
-            self.master.master.update_all_windows()
-        elif result == NodeActionResult.FAIL:
-            self.message.set('Block mining failed')
+        self.progressbar.configure(bootstyle=SUCCESS)
+        self.progressbar.start()
+
+        thread = MiningThread(self.node, self.password.get())
+        thread.start()
+
+        self.listen_for_complete_task(thread)
+
+    def listen_for_complete_task(self, thread: MiningThread):
+        """Check to see if task is complete; if so, stop the 
+        progressbar and show and alert
+        """
+        if not thread.is_alive():
+            self.progressbar.stop()
+            result = thread.join()
+            if result == NodeActionResult.SUCCESS:
+                self.message.set('Block successfully mined')
+                self.progressbar.configure(bootstyle=SUCCESS)
+                self.master.master.update_all_windows()
+            elif result == NodeActionResult.FAIL:
+                self.message.set('Mining attempt failed')
+                self.progressbar.configure(bootstyle=DANGER)
+                self.start_button.configure(state=NORMAL)
+            else:
+                self.message.set('Mining attempt invalid')
+                self.progressbar.configure(bootstyle=WARNING)
+                self.start_button.configure(state=NORMAL)
         else:
-            self.message.set('Block mining invalid')
-        self.progressbar.stop()
-        self.start_button.configure(state=NORMAL)
+            self.message.set('Mining.. please wait..')
+            self.after(5000, lambda: self.listen_for_complete_task(thread))
+
+
+class MiningThread(Thread):
+
+    def __init__(self, node: Node, miner_password: str):
+        Thread.__init__(self, target=node.mine_block,
+                        args=(miner_password,), daemon=True)
+        self._return = None
+
+    def run(self):
+        if self._target is not None:
+            self._return = self._target(*self._args,
+                                        **self._kwargs)
+
+    def join(self, *args) -> NodeActionResult:
+        Thread.join(self, *args)
+        return self._return
 
 
 class TxViewerWindow(ttk.Toplevel):
@@ -794,8 +829,8 @@ class UserTxListViewer(ttk.Frame):
 class CreateTxWindow(ttk.Toplevel):
     def __init__(self, master, node: Node):
         super().__init__(master,
-                         title="Create Transaction",
                          minsize=(600, 350))
+        self.title("Create Transaction")
         self.master = master
         self.node = node
 
@@ -808,6 +843,8 @@ class CreateTxWindow(ttk.Toplevel):
         self.create_widgets()
 
         self.place_window_center()
+        # self.configure(takefocus=True)
+        self.focus_force()
 
     def create_widgets(self):
         self.to_label = ttk.Label(self, text="To")
@@ -954,7 +991,7 @@ class Login(ttk.Labelframe):
         self.login_button = ttk.Button(
             self,
             text="Login",
-            bootstyle=PRIMARY,
+            bootstyle=(SUCCESS, OUTLINE),
             command=lambda: self.login(self.username.get(),
                                        self.password.get())
         )
@@ -966,7 +1003,7 @@ class Login(ttk.Labelframe):
         self.register_button = ttk.Button(
             self,
             text="Register",
-            bootstyle="primary outline",
+            bootstyle=(INFO, OUTLINE),
             command=lambda: self.register(self.username.get(),
                                           self.password.get())
         )
