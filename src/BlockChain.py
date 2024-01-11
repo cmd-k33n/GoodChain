@@ -150,13 +150,25 @@ class CBlock:
         self.validation_flags = [(sig, pub) for sig, pub in self.validation_flags
                                  if verify(self.hash, sig, decode_public_key(pub))]
         # A block is considered validated if it has at least 3 valid flags.
-        return len(self.validation_flags) == REQUIRED_FLAGS and self.__hash_is_valid() and all(verify(self.hash, sig, decode_public_key(pub)) for sig, pub in self.validation_flags)
+        return len(self.validation_flags) >= REQUIRED_FLAGS and self.__hash_is_valid() and all(verify(self.hash, sig, decode_public_key(pub)) for sig, pub in self.validation_flags)
 
     def was_validated_by(self, pub_key: rsa.RSAPublicKey) -> bool:
         return any((verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub) for sig, pub in self.validation_flags)
 
+    def get_validation_flag(self, pub_key: rsa.RSAPublicKey) -> bytes | None:
+        for sig, pub in self.validation_flags:
+            if verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub:
+                return sig, pub
+        return None
+
+    def add_validation_flag(self, sig: bytes, pub: bytes) -> bool:
+        if self.hash is not None and verify(self.hash, sig, decode_public_key(pub)) and not self.was_validated_by(decode_public_key(pub)) and self.block_is_valid():
+            self.validation_flags.append((sig, pub))
+            return True
+        return False
+
     def validate_block(self, priv_key: rsa.RSAPrivateKey, pub_key: rsa.RSAPublicKey) -> bool:
-        if self.hash is not None and not self.was_validated_by(pub_key) and self.block_is_valid() and len(self.validation_flags) < REQUIRED_FLAGS:
+        if self.hash is not None and not self.was_validated_by(pub_key) and self.block_is_valid():
             signature = sign(self.hash, priv_key)
             self.validation_flags.append((signature,
                                           encode_public_key(pub_key)))
