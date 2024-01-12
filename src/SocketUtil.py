@@ -38,7 +38,8 @@ received_objects = Queue()
 
 def start_listening_thread():
     # Spin a secondary thread for listening
-    t = Thread(target=start_listening)
+    # Daemon so it will close when the main window is closed.
+    t = Thread(target=start_listening, daemon=True)
     t.start()
 
 
@@ -130,5 +131,6 @@ def broadcast(obj: object):
     # Broadcast an object to all known nodes
     for port in LISTENING_PORTS:
         # spin thread for each sending port and add to queue
-        t = Thread(target=send_object, args=(NODE_IP, port, obj))
+        # Not a daemon so all transmissions complete before main thread exits in case the application is closed when sending.
+        t = Thread(target=send_object, args=(NODE_IP, port, obj), daemon=False)
         t.start()
