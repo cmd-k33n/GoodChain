@@ -389,7 +389,7 @@ class Node:
     # Receive objects from network interface
     def __start_receiving_objects(self):
         # spin thead to receive objects from network interface
-        t = Thread(target=self.__receive_objects)
+        t = Thread(target=self.__receive_objects, daemon=True)
         t.start()
 
     def __receive_objects(self):
