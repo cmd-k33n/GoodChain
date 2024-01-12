@@ -53,12 +53,14 @@ For example, if there is a new block created by another node, but it is not yet 
 """
 from __future__ import annotations
 import pickle
+from threading import Thread
 from typing import NamedTuple
 from src.Data import Accounts, Ledger, Pool, compose_relative_filepath
 from src.BlockChain import *
 from src.Transaction import Tx, REWARD, REWARD_VALUE, NORMAL
 from src.Signature import generate_keys, encode_keys
 from src.User import User
+from src.SocketUtil import start_listening_thread, broadcast, received_objects
 
 
 class NodeActionResult(Enum):
@@ -77,6 +79,12 @@ class Wallet(NamedTuple):
     available: float
 
 
+class ValidationFlag(NamedTuple):
+    block_id: int
+    public_key: bytes
+    signature: bytes
+
+
 class Node:
     def __init__(self):
         self.acc_hash, self.ledger_hash, self.pool_hash = self.__get_stored_hashes()
@@ -91,6 +99,11 @@ class Node:
             self.ledger.add_block(CBlock())
             self.curr_block = self.ledger.get_current_block()
             self.save_all()
+
+        # launch Network Interface
+        start_listening_thread()
+        # launch object receiver
+        self.__start_receiving_objects()
 
     def save_all(self):
         self.acc_hash = self.accounts.save()
@@ -130,11 +143,11 @@ class Node:
         if not self.accounts.user_exists(username):
             try:
                 priv_key, pub_key = generate_keys()
-                user_added = self.accounts.add_user(User(username,
-                                                         password,
-                                                         encode_keys((priv_key, pub_key),
-                                                                     password)
-                                                         )
+                user_added = self.accounts.add_user(new_user := User(username,
+                                                                     password,
+                                                                     encode_keys((priv_key, pub_key),
+                                                                                 password)
+                                                                     )
                                                     )
                 reward_tx = Tx(REWARD_VALUE, REWARD_VALUE, 0.0,
                                pub_key,
@@ -144,6 +157,8 @@ class Node:
                 reward_tx.sign(priv_key)
                 reward_processed = self.pool.add_tx(reward_tx)
                 if user_added and reward_processed:
+                    broadcast(new_user)
+                    broadcast(reward_tx)
                     self.auto_fill_rewards()
                     self.save_accounts()
                     self.save_pool()
@@ -162,8 +177,9 @@ class Node:
 
                 # check for validation of the most recently minted block
                 recent_block = self.ledger.get_current_block()
-                if recent_block.previousBlock and recent_block.previousBlock.state() == BlockState.MINED:
-                    self.validate_previous_block(password)
+                while recent_block.previousBlock and recent_block.previousBlock.state() == BlockState.MINED:
+                    self.validate_previous_block(password, recent_block)
+                    recent_block = recent_block.previousBlock
 
                 return NodeActionResult.SUCCESS
             else:
@@ -176,24 +192,28 @@ class Node:
         self.user_wallet = None
         return NodeActionResult.SUCCESS
 
-    def validate_previous_block(self, password: str):
-        prev_block = self.ledger.get_current_block().previousBlock
+    def validate_previous_block(self, password: str, cblock: CBlock):
+        prev_block = cblock.previousBlock
         if prev_block and prev_block.state() == BlockState.MINED:
             try:
                 priv_key, pub_key = self.user.get_rsa_keys(password)
                 if prev_block.validate_block(priv_key, pub_key):
+                    flag = ValidationFlag(
+                        prev_block.id, *prev_block.get_validation_flag(pub_key))
+                    broadcast(flag)
                     self.save_ledger()
 
-                if prev_block.state() == BlockState.VALIDATED:
-                    reward_tx = Tx(REWARD_VALUE, REWARD_VALUE, 0.0,
-                                   pub_key,
-                                   decode_public_key(prev_block.mined_by),
-                                   REWARD
-                                   )
-                    reward_tx.sign(priv_key)
-                    if self.pool.add_tx(reward_tx):
-                        self.auto_fill_rewards()
-                        self.save_pool()
+                    if prev_block.state() == BlockState.VALIDATED:
+                        reward_tx = Tx(REWARD_VALUE, REWARD_VALUE, 0.0,
+                                       pub_key,
+                                       decode_public_key(prev_block.mined_by),
+                                       REWARD
+                                       )
+                        reward_tx.sign(priv_key)
+                        if self.pool.add_tx(reward_tx):
+                            broadcast(reward_tx)
+                            self.auto_fill_rewards()
+                            self.save_pool()
 
                 return NodeActionResult.SUCCESS
             except:
@@ -210,6 +230,8 @@ class Node:
                                                    )
                 if new is not self.curr_block and self.curr_block.state() == BlockState.MINED:
                     if self.ledger.add_block(new):
+                        # send mined block to network
+                        broadcast(self.curr_block)
                         self.curr_block = self.ledger.get_current_block()
                         self.save_all()
                         return NodeActionResult.SUCCESS
@@ -301,6 +323,7 @@ class Node:
                 self.pool.add_tx(tx)
                 self.user_wallet = self.get_user_wallet(self.user)
                 self.save_pool()
+                broadcast(tx)
                 return NodeActionResult.SUCCESS
             except:
                 return NodeActionResult.FAIL
@@ -311,6 +334,7 @@ class Node:
             self.pool.cancel_tx(tx_hash, self.user.public_key)
             self.user_wallet = self.get_user_wallet(self.user)
             self.save_pool()
+            # TODO: broadcast tx cancellation
             return NodeActionResult.SUCCESS
         except:
             return NodeActionResult.FAIL
@@ -361,3 +385,53 @@ class Node:
             self.curr_block = prev_block
             return NodeActionResult.SUCCESS
         return NodeActionResult.INVALID
+
+    # Receive objects from network interface
+    def __start_receiving_objects(self):
+        # spin thead to receive objects from network interface
+        t = Thread(target=self.__receive_objects)
+        t.start()
+
+    def __receive_objects(self):
+        # TODO: Change print to message queue for GUI
+        while True:
+            try:
+                obj = received_objects.get(block=True, timeout=None)
+                match type(obj):
+                    case User() as user:
+                        if self.accounts.add_user(user):
+                            print(f"Received and added new user: {user}")
+                            self.save_accounts()
+                        else:
+                            print(f"Received and rejected user: {user}")
+                    case Tx() as tx:
+                        # lookup user and wallet to check if sender had balance to send tx
+                        user = self.accounts.get_user_by_public_key(tx.sender)
+                        wallet = self.get_user_wallet(user)
+                        if wallet.available >= tx.get_input():
+                            if self.pool.add_tx(tx):
+                                # checked if tx is valid ergo signed correctly
+                                print(f"Received new tx: {obj}")
+                                self.save_pool()
+                        else:
+                            print(f"Received and rejected tx: {tx}")
+                    case CBlock() as new_block:
+                        if self.ledger.add_block(new_block):
+                            print(f"Received new block: {obj}")
+                            self.save_ledger()
+                        else:
+                            print(f"Received and rejected block: {new_block}")
+                    case ValidationFlag() as flag:
+                        if self.ledger.get_block_by_id(flag.block_id).add_validation_flag(flag.signature, flag.public_key):
+                            print(
+                                f"Received new validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
+                            self.save_ledger()
+                        else:
+                            print(
+                                f"Received and rejected validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
+                    case _:
+                        print(
+                            f"Received unknown object which was ignored: {obj}")
+            except Exception as e:
+                print(f"Receiving object failed with error {e}")
+                continue
