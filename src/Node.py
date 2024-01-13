@@ -411,14 +411,19 @@ class Node:
                         if wallet.available >= tx.get_input():
                             if self.pool.add_tx(tx):
                                 # checked if tx is valid ergo signed correctly
-                                print(f"Received new tx: {obj}")
+                                print(f"Received new tx: {tx}")
+                                self.auto_fill_rewards()
+                                self.save_ledger()
                                 self.save_pool()
                         else:
                             print(f"Received and rejected tx: {tx}")
                     case CBlock() as new_block:
-                        if self.ledger.add_block(new_block):
-                            print(f"Received new block: {obj}")
+                        if self.ledger.add_mined_block(new_block):
+                            print(f"Received new block: {new_block}")
+                            print(f"Updating txs pool: {new_block.txs}")
+                            self.pool.txs -= new_block.txs
                             self.save_ledger()
+                            self.save_pool()
                         else:
                             print(f"Received and rejected block: {new_block}")
                     case ValidationFlag() as flag:
