@@ -17,20 +17,22 @@ from threading import Thread
 from queue import Queue
 
 # Constants
-NODE_IP = socket.gethostbyname('localhost')
+NODE_IP = socket.gethostbyname(socket.gethostname())
 HEADER_LEN = 64
 FORMAT = 'utf-8'
 SEND_TIMEOUT = 30
 MAX_CONNECTIONS = 5
-NODE_LISTENING_PORT = 5050
-NODE_SENDING_PORT = 5060
+NODE_PORT = 5050
 
-# TODO: Since we will be working locally with multiple nodes we will actually need to manually set different ports for each node.
 # TODO: change print statements to logging statements
 
-LISTENING_PORTS = (5051, 5052, 5053, 5054)
+# HARDCODED NODES FOR TESTING
+NODES = {"goodchain_node_1", "goodchain_node_2",
+         "goodchain_node_3", "goodchain_node_4"}
 
-CONFIRM_MSG = "Message received"
+# NODES = socket.request("https://www.goodchain.com/nodes").json()
+
+CONFIRM_MSG = "Object received"
 CONFIRM_MSG_LEN = len(CONFIRM_MSG.encode(FORMAT))
 
 received_objects = Queue()
@@ -45,68 +47,57 @@ def start_listening_thread():
 
 def start_listening():
     # Create the socket object
-    s = open_listening_connection()
-
-    while True:
-        # Wait for the connection
-        conn, addr = s.accept()
-        print(f"[NEW CONNECTION] {addr[0]}:{addr[1]} connected.")
-
-        # Spin a tertiary thread once there is a connection
-        t = Thread(target=receive_object, args=(conn, addr))
-        t.start()
-
-
-def open_listening_connection(node_ip: str = NODE_IP, node_port: int = NODE_LISTENING_PORT) -> socket.socket:
-    # Create the socket object
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     try:
         # Bind the socket to the IP and port
-        s.bind((node_ip, node_port))
+        s.bind((NODE_IP, NODE_PORT))
 
         # Listen for incoming connections
         s.listen(MAX_CONNECTIONS)
 
-        print(f"[LISTENING] Node is listening on {node_ip}:{node_port}")
+        print(f"[LISTENING] Node is listening on {NODE_IP}:{NODE_PORT}")
+
+        while True:
+            # Wait for the connection
+            conn, addr = s.accept()
+            print(f"[NEW CONNECTION] {addr[0]}:{addr[1]} connected.")
+
+            # Spin a tertiary thread once there is a connection
+            t = Thread(target=receive_object, args=(conn, addr))
+            t.start()
+
     except OSError as e:
-        s.close()
         print(e)
+    finally:
+        s.close()
 
-    return s
 
-
-def open_sending_connection(host: str, port: int) -> socket.socket:
+def send_object(receiver_ip: str, receiver_port: int, obj: object):
     # Create the socket object
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     s.settimeout(SEND_TIMEOUT)
 
-    try:  # Connect to the server
-        s.connect((host, port))
+    try:  # Connect to the node
+        s.connect((receiver_ip, receiver_port))
+
+        # prepare the object and header
+        data = pickle.dumps(obj)
+        data_size = len(data)
+        header = str(data_size).encode(FORMAT)
+        header += b' ' * (HEADER_LEN - len(header))
+
+        print(f"[SENDING] {data_size} bytes to {receiver_ip}:{receiver_port}")
+        s.sendall(header)  # send header
+        s.sendall(data)  # send data
+
+        print(s.recv(CONFIRM_MSG_LEN).decode(FORMAT))  # receive confirmation
+
     except OSError as e:
-        s.close()
         print(e)
-
-    return s
-
-
-def send_object(receiver_ip: str, receiver_port: int, obj: object):
-    # Create the socket object
-    s = open_sending_connection(receiver_ip, receiver_port)
-    # prepare the object and header
-    data = pickle.dumps(obj)
-    data_size = len(data)
-    header = str(data_size).encode(FORMAT)
-    header += b' ' * (HEADER_LEN - len(header))
-
-    print(f"[SENDING] {data_size} bytes to {receiver_ip}:{receiver_port}")
-    s.sendall(header)  # send header
-    s.sendall(data)  # send data
-
-    print(s.recv(CONFIRM_MSG_LEN).decode(FORMAT))  # receive confirmation
-
-    s.close()
+    finally:
+        s.close()
 
 
 def receive_object(conn: socket.socket, addr: tuple):
@@ -129,8 +120,12 @@ def receive_object(conn: socket.socket, addr: tuple):
 
 def broadcast(obj: object):
     # Broadcast an object to all known nodes
-    for port in LISTENING_PORTS:
+    for node in NODES:
         # spin thread for each sending port and add to queue
         # Not a daemon so all transmissions complete before main thread exits in case the application is closed when sending.
-        t = Thread(target=send_object, args=(NODE_IP, port, obj), daemon=False)
-        t.start()
+        node_ip = socket.gethostbyname(node)
+        if NODE_IP != node_ip:
+            # Don't send to self
+            t = Thread(target=send_object, args=(
+                node_ip, NODE_PORT, obj), daemon=False)
+            t.start()
