@@ -397,7 +397,7 @@ class Node:
         while True:
             try:
                 obj = received_objects.get(block=True, timeout=None)
-                match type(obj):
+                match obj:
                     case User() as user:
                         if self.accounts.add_user(user):
                             print(f"Received and added new user: {user}")
@@ -405,16 +405,21 @@ class Node:
                         else:
                             print(f"Received and rejected user: {user}")
                     case Tx() as tx:
-                        # lookup user and wallet to check if sender had balance to send tx
-                        user = self.accounts.get_user_by_public_key(tx.sender)
-                        wallet = self.get_user_wallet(user)
-                        if wallet.available >= tx.get_input():
+                        if tx.type == NORMAL:
+                            # lookup user and wallet to check if sender had balance to send tx
+                            user = self.accounts.get_user_by_public_key(
+                                tx.sender)
+                            wallet = self.get_user_wallet(user)
+                            if wallet.available >= tx.get_input():
+                                if self.pool.add_tx(tx):
+                                    # checked if tx is valid ergo signed correctly
+                                    print(f"Received new tx: {tx}")
+                                    self.save_pool()
+                        elif tx.type == REWARD:
                             if self.pool.add_tx(tx):
-                                # checked if tx is valid ergo signed correctly
-                                print(f"Received new tx: {tx}")
+                                print(f"Received new reward tx: {tx}")
                                 self.auto_fill_rewards()
                                 self.save_ledger()
-                                self.save_pool()
                         else:
                             print(f"Received and rejected tx: {tx}")
                     case CBlock() as new_block:
