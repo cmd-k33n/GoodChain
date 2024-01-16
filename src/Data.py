@@ -114,24 +114,23 @@ class Ledger:
         return False
 
     def add_mined_block(self, block: CBlock) -> bool:
-        if (block.block_is_valid()  # block is valid
-            and block.state() >= BlockState.MINED  # block is mined
-            # block's previous block is validated
-                    and (block.previousBlock is None or block.previousBlock.state() == BlockState.VALIDATED)
+        # if block is valid, mined and previous block is validated
+        if (block.block_is_valid()
+                and block.state() >= BlockState.MINED
+                and (block.previousBlock is None or block.previousBlock.state() == BlockState.VALIDATED)
             ):
-            if (self.head.id == block.id  # block is the current head
-                    # block's previous block is the head's previous block
-                    and self.head.previousBlock == block.previousBlock
-                    # block was mined before the head
-                    and (self.head.mined_at is None or self.head.mined_at > block.mined_at)
-
-                # block is the previous block
-                ) or (self.head.previousBlock is not None and self.head.previousBlock.id == block.id
-                      # block's previous block is the head's previous block's previous block
-                      and self.head.previousBlock.previousBlock == block.previousBlock
-                      # block was mined before the head's previous block
-                      and self.head.previousBlock.mined_at > block.mined_at
-                      ):
+            # if head is the block's previous block, or
+            # block is the current head, block's previous block is the head's previous block, block was mined before the head, or
+            # block is the previous block, it's previous block is the head's previous block's and was mined before the head's previous block
+            if (self.head == block.previousBlock
+                ) or (self.head.id == block.id
+                      and self.head.previousBlock == block.previousBlock
+                      and (self.head.mined_at is None or self.head.mined_at > block.mined_at)
+                      ) or (self.head.previousBlock is not None and self.head.previousBlock.id == block.id
+                            and self.head.previousBlock.previousBlock == block.previousBlock
+                            and self.head.previousBlock.mined_at > block.mined_at
+                            ):
+                # add a new block built on the mined block and make it the head
                 self.head = CBlock(block)
                 return True
         return False
