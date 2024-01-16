@@ -72,7 +72,8 @@ from src.Node import *
 
 class Application(ttk.Window):
     def __init__(self):
-        super().__init__(title="GoodChain", themename="darkly")
+        super().__init__(
+            title=f"GoodChain\t[node @ {NODE_IP}:{NODE_PORT}]", themename="darkly")
         # full screen / maximized screen
         # self.state('zoomed')
         # self.attributes('-fullscreen', True)

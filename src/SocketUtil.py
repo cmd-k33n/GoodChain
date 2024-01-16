@@ -17,12 +17,14 @@ from threading import Thread
 from queue import Queue
 
 # Constants
-NODE_IP = socket.gethostbyname(socket.gethostname())
+NODE_HOSTNAME = socket.gethostname()
+NODE_IP = socket.gethostbyname(NODE_HOSTNAME)
+NODE_PORT = 5050
+
 HEADER_LEN = 64
 FORMAT = 'utf-8'
 SEND_TIMEOUT = 30
 MAX_CONNECTIONS = 5
-NODE_PORT = 5050
 
 # TODO: change print statements to logging statements
 
@@ -30,6 +32,7 @@ NODE_PORT = 5050
 NODES = {"goodchain_node_1", "goodchain_node_2",
          "goodchain_node_3", "goodchain_node_4"}
 
+# Could do something like this to get nodes from a server
 # NODES = socket.request("https://www.goodchain.com/nodes").json()
 
 CONFIRM_MSG = "Object received"

@@ -60,7 +60,7 @@ from src.BlockChain import *
 from src.Transaction import Tx, REWARD, REWARD_VALUE, NORMAL
 from src.Signature import generate_keys, encode_keys
 from src.User import User
-from src.SocketUtil import start_listening_thread, broadcast, received_objects
+from src.SocketUtil import start_listening_thread, broadcast, received_objects, NODE_HOSTNAME, NODE_PORT, NODE_IP
 
 
 class NodeActionResult(Enum):
