@@ -79,12 +79,6 @@ class Wallet(NamedTuple):
     available: float
 
 
-class ValidationFlag(NamedTuple):
-    block_id: int
-    public_key: bytes
-    signature: bytes
-
-
 class Node:
     def __init__(self):
         self.acc_hash, self.ledger_hash, self.pool_hash = self.__get_stored_hashes()
@@ -198,8 +192,7 @@ class Node:
             try:
                 priv_key, pub_key = self.user.get_rsa_keys(password)
                 if prev_block.validate_block(priv_key, pub_key):
-                    flag = ValidationFlag(
-                        prev_block.id, *prev_block.get_validation_flag(pub_key))
+                    flag = prev_block.get_validation_flag(pub_key)
                     broadcast(flag)
                     self.save_ledger()
 
@@ -426,7 +419,9 @@ class Node:
                         if self.ledger.add_mined_block(new_block):
                             print(f"Received new block: {new_block}")
                             print(f"Updating txs pool: {new_block.txs}")
-                            self.pool.txs -= new_block.txs
+                            for key in new_block.txs:
+                                if key in self.pool.txs:
+                                    self.pool.pop_tx(key)
                             self.save_ledger()
                             self.save_pool()
                         else:

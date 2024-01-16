@@ -36,7 +36,7 @@ from enum import Enum
 from time import time
 from math import fsum, isclose
 import secrets
-from typing import Mapping
+from typing import NamedTuple
 from src.Signature import *
 from src.Transaction import *
 from cryptography.hazmat.primitives import hashes
@@ -64,6 +64,12 @@ class BlockState(Enum):
 
     def __eq__(self, other: BlockState) -> bool:
         return self.value == other.value
+
+
+class ValidationFlag(NamedTuple):
+    block_id: int
+    public_key: bytes
+    signature: bytes
 
 
 class CBlock:
@@ -155,10 +161,10 @@ class CBlock:
     def was_validated_by(self, pub_key: rsa.RSAPublicKey) -> bool:
         return any((verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub) for sig, pub in self.validation_flags)
 
-    def get_validation_flag(self, pub_key: rsa.RSAPublicKey) -> bytes | None:
+    def get_validation_flag(self, pub_key: rsa.RSAPublicKey) -> ValidationFlag | None:
         for sig, pub in self.validation_flags:
             if verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub:
-                return sig, pub
+                return ValidationFlag(self.id, pub, sig)
         return None
 
     def add_validation_flag(self, sig: bytes, pub: bytes) -> bool:
