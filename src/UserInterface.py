@@ -74,7 +74,7 @@ class Application(ttk.Window):
     def __init__(self):
         super().__init__(title="GoodChain", themename="darkly")
         # full screen / maximized screen
-        self.state('zoomed')
+        # self.state('zoomed')
         # self.attributes('-fullscreen', True)
         self.create_widgets()
 
