@@ -73,14 +73,14 @@ def start_listening():
         s.close()
 
 
-def send_object(receiver_ip: str, receiver_port: int, obj: object):
+def send_object(recv_ip: str, recv_port: int, obj: object):
     # Create the socket object
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
     s.settimeout(SEND_TIMEOUT)
 
     try:  # Connect to the node
-        s.connect((receiver_ip, receiver_port))
+        s.connect((recv_ip, recv_port))
 
         # prepare the object and header
         data = pickle.dumps(obj)
@@ -88,11 +88,12 @@ def send_object(receiver_ip: str, receiver_port: int, obj: object):
         header = str(data_size).encode(FORMAT)
         header += b' ' * (HEADER_LEN - len(header))
 
-        print(f"[SENDING] {data_size} bytes to {receiver_ip}:{receiver_port}")
+        print(f"[SENDING] {data_size} bytes to {recv_ip}:{recv_port}")
         s.sendall(header)  # send header
         s.sendall(data)  # send data
 
-        print(s.recv(CONFIRM_MSG_LEN).decode(FORMAT))  # receive confirmation
+        # receive confirmation
+        print(f"{recv_ip}:{recv_port} says: {s.recv(CONFIRM_MSG_LEN).decode(FORMAT)}")
 
     except OSError as e:
         print(e)
