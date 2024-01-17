@@ -53,6 +53,7 @@ For example, if there is a new block created by another node, but it is not yet 
 """
 from __future__ import annotations
 import pickle
+from queue import Queue
 from threading import Thread
 from typing import NamedTuple
 from src.Data import Accounts, Ledger, Pool, compose_relative_filepath
@@ -77,6 +78,10 @@ class Wallet(NamedTuple):
     reserved: float
     fees: float
     available: float
+
+
+# Queue to pass system messages to GUI
+system_messages = Queue()
 
 
 class Node:
@@ -395,6 +400,8 @@ class Node:
                         if self.accounts.add_user(user):
                             print(f"Received and added new user: {user}")
                             self.save_accounts()
+                            system_messages.put(
+                                f"NEW USER REGISTERED: {user.username}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
                         else:
                             print(f"Received and rejected user: {user}")
                     case Tx() as tx:
@@ -406,13 +413,18 @@ class Node:
                             if wallet.available >= tx.get_input():
                                 if self.pool.add_tx(tx):
                                     # checked if tx is valid ergo signed correctly
-                                    print(f"Received new tx: {tx}")
+                                    print(f"Received new tx: {tx.hash.hex()}")
                                     self.save_pool()
+                                    system_messages.put(
+                                        f"NEW TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
                         elif tx.type == REWARD:
                             if self.pool.add_tx(tx):
-                                print(f"Received new reward tx: {tx}")
+                                print(
+                                    f"Received new reward tx: {tx.hash.hex()}")
                                 self.auto_fill_rewards()
                                 self.save_ledger()
+                                system_messages.put(
+                                    f"NEW REWARD TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
                         else:
                             print(f"Received and rejected tx: {tx}")
                     case CBlock() as new_block:
@@ -424,6 +436,8 @@ class Node:
                                     self.pool.pop_tx(key)
                             self.save_ledger()
                             self.save_pool()
+                            system_messages.put(
+                                f"NEW BLOCK #{new_block.id} [{new_block.hash}]\nmined by {new_block.mined_by.hex()} @ {new_block.mined_at}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
                         else:
                             print(f"Received and rejected block: {new_block}")
                     case ValidationFlag() as flag:
@@ -431,6 +445,8 @@ class Node:
                             print(
                                 f"Received new validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
                             self.save_ledger()
+                            system_messages.put(
+                                f"NEW FLAG: Block #{flag.block_id}\nvalidated by {flag.public_key.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
                         else:
                             print(
                                 f"Received and rejected validation flag for block: {flag.block_id} from {flag.public_key.hex()}")

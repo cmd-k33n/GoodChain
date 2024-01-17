@@ -65,6 +65,7 @@ from ttkbootstrap.constants import *
 from ttkbootstrap.widgets import Meter
 from ttkbootstrap.dialogs import Messagebox, QueryDialog
 from ttkbootstrap.icons import Icon
+from ttkbootstrap.toast import ToastNotification
 
 from src.BlockChain import *
 from src.Node import *
@@ -94,6 +95,7 @@ class MainFrame(ttk.Frame):
         self.master.grid_columnconfigure(0, weight=1)
 
         self.create_widgets()
+        self.check_system_messages()
 
     def create_widgets(self):
 
@@ -179,6 +181,22 @@ class MainFrame(ttk.Frame):
         self.update_profilewindow()
         self.update_blockwindow()
         self.update_poolwindow()
+
+    def check_system_messages(self):
+        try:
+            msg = system_messages.get(block=False)
+            if msg is not None:
+                toast = ToastNotification(
+                    title="GoodChain Notification",
+                    message=msg,
+                    position=(100, 100, 'n')
+                )
+                toast.show_toast()
+                self.after(20, self.update_all_windows)
+        except Exception as e:
+            pass
+        finally:
+            self.after(2000, self.check_system_messages)
 
 
 class TopWindow(ttk.Frame):
