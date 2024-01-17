@@ -192,11 +192,11 @@ class MainFrame(ttk.Frame):
                     position=(100, 100, 'n')
                 )
                 toast.show_toast()
-                self.after(20, self.update_all_windows)
+                self.after(100, self.update_all_windows)
         except Exception as e:
             pass
         finally:
-            self.after(2000, self.check_system_messages)
+            self.after(5000, self.check_system_messages)
 
 
 class TopWindow(ttk.Frame):
