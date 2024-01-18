@@ -114,7 +114,7 @@ def receive_object(conn: socket.socket, addr: tuple):
 
     # Send confirmation
     conn.sendall(CONFIRM_MSG.encode(FORMAT))
-    print(f"[RECEIVED] {obj} from {addr[0]}:{addr[1]}")
+    # print(f"[RECEIVED] {obj} from {addr[0]}:{addr[1]}")
 
     # Close the connection
     conn.close()
