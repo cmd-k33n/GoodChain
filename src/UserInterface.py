@@ -184,17 +184,23 @@ class MainFrame(ttk.Frame):
 
     def check_system_messages(self):
         try:
-            msg = system_messages.get(block=False)
-            if msg is not None:
+            msg = None
+
+            while not system_messages.empty():
+                msg = system_messages.get(block=False)
                 toast = ToastNotification(
                     title="GoodChain Notification",
                     message=msg,
+                    bootstyle=(INFO),
+                    # duration=5000,
                     position=(100, 100, 'n')
                 )
                 toast.show_toast()
+
+            if msg is not None:
                 self.after(100, self.update_all_windows)
         except Exception as e:
-            pass
+            print(f"SYSTEM MESSAGE ERROR OCCURED:\n{e}")
         finally:
             self.after(5000, self.check_system_messages)
 
