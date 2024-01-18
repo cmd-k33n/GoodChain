@@ -23,6 +23,7 @@ The purpose of each file is briefly described below:
 from __future__ import annotations
 import pickle
 from pathlib import Path
+import threading
 from typing import Mapping
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -69,13 +70,18 @@ def load_if_valid(file: str, hash: bytes) -> object | None:
         return None
 
 
+account_mutex = threading.Lock()
+
+
 class Accounts:
     def __init__(self):
         self.users: dict[str, User] = dict()
 
     def add_user(self, user: User) -> bool:
         if not user.username in self.users.keys():
+            account_mutex.acquire()
             self.users.update({user.username: user})
+            account_mutex.release()
             return True
         return False
 
@@ -95,7 +101,10 @@ class Accounts:
         return username in self.users.keys()
 
     def save(self) -> bytes | None:
-        return save_and_return_hash("database.dat", self)
+        account_mutex.acquire()
+        result = save_and_return_hash("database.dat", self)
+        account_mutex.release()
+        return result
 
     @staticmethod
     def load(acc_hash: bytes) -> Accounts:
@@ -103,22 +112,29 @@ class Accounts:
         return accounts if accounts is not None else Accounts()
 
 
+ledger_mutex = threading.Lock()
+
+
 class Ledger:
     def __init__(self):
         self.head: CBlock = None
 
     def add_block(self, block: CBlock) -> bool:
+        ledger_mutex.acquire()
         if block.block_is_valid() and (self.head is None or self.head == block.previousBlock):
             self.head = block
+            ledger_mutex.release()
             return True
+        ledger_mutex.release()
         return False
 
     def add_mined_block(self, block: CBlock) -> bool:
         # if block is valid, mined and previous block is validated
+        ledger_mutex.acquire()
         if (block.block_is_valid()
                 and block.state() >= BlockState.MINED
                 and (block.previousBlock is None or block.previousBlock.state() == BlockState.VALIDATED)
-                ):
+            ):
             # if head is the block's previous block, or
             # block is the current head, block's previous block is the head's previous block, block was mined before the head
             if (self.head.id == block.id  # head is current block
@@ -130,7 +146,9 @@ class Ledger:
                       ):
                 # add a new block built on the mined block and make it the head
                 self.head = CBlock(block)
+                ledger_mutex.release()
                 return True
+        ledger_mutex.release()
         return False
 
     def get_block_by_id(self, block_id: int) -> CBlock:
@@ -190,12 +208,18 @@ class Ledger:
         return self.head.get_txs_by_public_key(public_key)
 
     def save(self) -> bytes | None:
-        return save_and_return_hash("ledger.dat", self)
+        ledger_mutex.acquire()
+        result = save_and_return_hash("ledger.dat", self)
+        ledger_mutex.release()
+        return result
 
     @staticmethod
     def load(ledger_hash: bytes) -> Ledger:
         ledger: Ledger = load_if_valid("ledger.dat", ledger_hash)
         return ledger if ledger is not None else Ledger()
+
+
+pool_mutex = threading.Lock()
 
 
 class Pool:
@@ -230,7 +254,10 @@ class Pool:
         return {tx_hash: tx for tx_hash, tx in self.txs.items() if tx.sender == public_key or tx.receiver == public_key}
 
     def save(self) -> bytes | None:
-        return save_and_return_hash("pool.dat", self)
+        pool_mutex.acquire()
+        result = save_and_return_hash("pool.dat", self)
+        pool_mutex.release()
+        return result
 
     @staticmethod
     def load(pool_hash: bytes) -> Pool:
