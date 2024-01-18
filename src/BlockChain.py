@@ -36,7 +36,7 @@ from enum import Enum
 from time import time
 from math import fsum, isclose
 import secrets
-from typing import Mapping
+from typing import NamedTuple
 from src.Signature import *
 from src.Transaction import *
 from cryptography.hazmat.primitives import hashes
@@ -66,6 +66,12 @@ class BlockState(Enum):
         return self.value == other.value
 
 
+class ValidationFlag(NamedTuple):
+    block_id: int
+    public_key: bytes
+    signature: bytes
+
+
 class CBlock:
     def __init__(self, previousBlock: CBlock = None):
         self.txs: dict[str, Tx] = dict()
@@ -80,6 +86,9 @@ class CBlock:
         self.signature = None
         self.validation_flags: list[(bytes, bytes)] = []
         self.id = 0 if previousBlock is None else previousBlock.id + 1
+
+    def __repr__(self) -> str:
+        return f"Block {self.id} [{self.state()}] : {self.hash.hex() if self.hash is not None else 'no hash yet'}"
 
     def compute_hash(self) -> bytes:
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
@@ -150,13 +159,25 @@ class CBlock:
         self.validation_flags = [(sig, pub) for sig, pub in self.validation_flags
                                  if verify(self.hash, sig, decode_public_key(pub))]
         # A block is considered validated if it has at least 3 valid flags.
-        return len(self.validation_flags) == REQUIRED_FLAGS and self.__hash_is_valid() and all(verify(self.hash, sig, decode_public_key(pub)) for sig, pub in self.validation_flags)
+        return len(self.validation_flags) >= REQUIRED_FLAGS and self.__hash_is_valid() and all(verify(self.hash, sig, decode_public_key(pub)) for sig, pub in self.validation_flags)
 
     def was_validated_by(self, pub_key: rsa.RSAPublicKey) -> bool:
         return any((verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub) for sig, pub in self.validation_flags)
 
+    def get_validation_flag(self, pub_key: rsa.RSAPublicKey) -> ValidationFlag | None:
+        for sig, pub in self.validation_flags:
+            if verify(self.hash, sig, pub_key) and encode_public_key(pub_key) == pub:
+                return ValidationFlag(self.id, pub, sig)
+        return None
+
+    def add_validation_flag(self, sig: bytes, pub: bytes) -> bool:
+        if self.hash is not None and verify(self.hash, sig, decode_public_key(pub)) and not self.was_validated_by(decode_public_key(pub)) and self.block_is_valid():
+            self.validation_flags.append((sig, pub))
+            return True
+        return False
+
     def validate_block(self, priv_key: rsa.RSAPrivateKey, pub_key: rsa.RSAPublicKey) -> bool:
-        if self.hash is not None and not self.was_validated_by(pub_key) and self.block_is_valid() and len(self.validation_flags) < REQUIRED_FLAGS:
+        if self.hash is not None and not self.was_validated_by(pub_key) and self.block_is_valid():
             signature = sign(self.hash, priv_key)
             self.validation_flags.append((signature,
                                           encode_public_key(pub_key)))

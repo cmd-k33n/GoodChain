@@ -113,6 +113,26 @@ class Ledger:
             return True
         return False
 
+    def add_mined_block(self, block: CBlock) -> bool:
+        # if block is valid, mined and previous block is validated
+        if (block.block_is_valid()
+                and block.state() >= BlockState.MINED
+                and (block.previousBlock is None or block.previousBlock.state() == BlockState.VALIDATED)
+                ):
+            # if head is the block's previous block, or
+            # block is the current head, block's previous block is the head's previous block, block was mined before the head
+            if (self.head.id == block.id  # head is current block
+                and self.head.previousHash == block.previousHash
+                and (self.head.mined_at is None or self.head.mined_at > block.mined_at)
+                ) or (block.previousBlock is not None  # head is previous block
+                      and self.head.id == block.previousBlock.id
+                      and self.head.hash == block.previousHash
+                      ):
+                # add a new block built on the mined block and make it the head
+                self.head = CBlock(block)
+                return True
+        return False
+
     def get_block_by_id(self, block_id: int) -> CBlock:
         if self.head.id == block_id:
             return self.head
