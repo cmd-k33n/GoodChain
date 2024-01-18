@@ -230,8 +230,11 @@ class Node:
                     if self.ledger.add_block(new):
                         # send mined block to network
                         broadcast(self.curr_block)
-                        self.curr_block = self.ledger.get_current_block()
                         self.save_all()
+                        # update current block
+                        self.curr_block = self.ledger.get_current_block()
+                        # update user wallet
+                        self.user_wallet = self.get_user_wallet(self.user)
                         return NodeActionResult.SUCCESS
             except:
                 return NodeActionResult.FAIL
@@ -429,11 +432,16 @@ class Node:
                             print(f"Received and rejected tx: {tx}")
                     case CBlock() as new_block:
                         if self.ledger.add_mined_block(new_block):
-                            print(f"Received new block: {new_block}")
-                            print(f"Updating txs pool: {new_block.txs}")
+                            print(
+                                f"Received new block: {new_block}\nUpdating Tx Pool...")
+                            # print(f"Updating txs pool: {new_block.txs}")
                             for key in new_block.txs:
                                 if key in self.pool.txs:
                                     self.pool.pop_tx(key)
+                            self.curr_block = self.ledger.get_current_block()
+                            if self.user is not None:
+                                self.user_wallet = self.get_user_wallet(
+                                    self.user)
                             self.save_ledger()
                             self.save_pool()
                             system_messages.put(
