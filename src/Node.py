@@ -404,7 +404,7 @@ class Node:
                             print(f"Received and added new user: {user}")
                             self.save_accounts()
                             system_messages.put(
-                                f"NEW USER REGISTERED: {user.username}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
+                                f"NEW USER REGISTERED: {user.username}\n{datetime.now().strftime('%Y-%M-%D %H:%M:%S')}")
                         else:
                             print(f"Received and rejected user: {user}")
                     case Tx() as tx:
@@ -419,7 +419,7 @@ class Node:
                                     print(f"Received new tx: {tx.hash.hex()}")
                                     self.save_pool()
                                     system_messages.put(
-                                        f"NEW TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
+                                        f"NEW TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:%S')}")
                         elif tx.type == REWARD:
                             if self.pool.add_tx(tx):
                                 print(
@@ -427,7 +427,7 @@ class Node:
                                 self.auto_fill_rewards()
                                 self.save_ledger()
                                 system_messages.put(
-                                    f"NEW REWARD TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
+                                    f"NEW REWARD TX: {tx.hash.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:%S')}")
                         else:
                             print(f"Received and rejected tx: {tx}")
                     case CBlock() as new_block:
@@ -445,7 +445,7 @@ class Node:
                             self.save_ledger()
                             self.save_pool()
                             system_messages.put(
-                                f"NEW BLOCK #{new_block.id} [{new_block.hash}]\nmined by {new_block.mined_by.hex()} @ {new_block.mined_at}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
+                                f"NEW BLOCK #{new_block.id} [{new_block.hash}]\nmined by {new_block.mined_by.hex()} @ {new_block.mined_at}\n{datetime.now().strftime('%Y-%M-%D %H:%M:%S')}")
                         else:
                             print(f"Received and rejected block: {new_block}")
                     case ValidationFlag() as flag:
@@ -454,7 +454,7 @@ class Node:
                                 f"Received new validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
                             self.save_ledger()
                             system_messages.put(
-                                f"NEW FLAG: Block #{flag.block_id}\nvalidated by {flag.public_key.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:$S')}")
+                                f"NEW FLAG: Block #{flag.block_id}\nvalidated by {flag.public_key.hex()}\n{datetime.now().strftime('%Y-%M-%D %H:%M:%S')}")
                         else:
                             print(
                                 f"Received and rejected validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
