@@ -1,11 +1,49 @@
 version: '3.4'
 
 services:
-  goodchain:
+  goodchain_node_1:
     image: goodchain
     build:
       context: .
       dockerfile: ./Dockerfile
-    command: ["sh", "-c", "pip install debugpy -t /tmp && python /tmp/debugpy --wait-for-client --listen 0.0.0.0:5678 GoodChain.py "]
-    ports:
-      - 5678:5678
+    container_name: goodchain_node_1
+    volumes:
+      - ./src:/app/src
+    networks:
+      - gcnet
+
+  goodchain_node_2:
+    image: goodchain
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: goodchain_node_2
+    volumes:
+      - ./src:/app/src
+    networks:
+      - gcnet
+
+  goodchain_node_3:
+    image: goodchain
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: goodchain_node_3
+    volumes:
+      - ./src:/app/src
+    networks:
+      - gcnet
+
+  goodchain_node_4:
+    image: goodchain
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    container_name: goodchain_node_4
+    volumes:
+      - ./src:/app/src
+    networks:
+      - gcnet
+
+networks:
+  gcnet:
