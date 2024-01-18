@@ -87,6 +87,9 @@ class CBlock:
         self.validation_flags: list[(bytes, bytes)] = []
         self.id = 0 if previousBlock is None else previousBlock.id + 1
 
+    def __repr__(self) -> str:
+        return f"Block {self.id} [{self.state()}] : {self.hash.hex() if self.hash is not None else 'no hash yet'}"
+
     def compute_hash(self) -> bytes:
         digest = hashes.Hash(hashes.SHA256(), backend=default_backend())
         digest.update(bytes(str(self.id), 'utf8'))
