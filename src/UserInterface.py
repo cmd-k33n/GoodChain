@@ -332,14 +332,16 @@ class BlockViewer(ttk.Labelframe):
                               )
 
         self.state_meter = Meter(master=self,
-                                 amountused=self.block.state().value,
-                                 amounttotal=3,
+                                 amountused=len(self.block.validation_flags),
+                                 amounttotal=3 if len(self.block.validation_flags) <= 3 else 10 if len(
+                                     self.block.validation_flags) <= 10 else 100,
                                  wedgesize=10,
                                  bootstyle=state_meter_style,
                                  interactive=False,
                                  arcrange=180,
                                  arcoffset=180,
-                                 subtext=f"{self.block.state().name}"
+                                 subtext=f"{len(self.block.validation_flags)}" + ("/3 Flags" if len(
+                                     self.block.validation_flags) <= 3 else "/10 Flags" if len(self.block.validation_flags) <= 10 else "/100 Flags")
                                  )
 
         if self.node.user is not None and self.block.state() == BlockState.READY:
@@ -352,6 +354,20 @@ class BlockViewer(ttk.Labelframe):
                                   columnspan=2,
                                   sticky=(N, E, S, W)
                                   )
+
+        if (self.node.user is not None
+                and self.block.state() >= BlockState.MINED
+                and not self.block.was_validated_by(decode_public_key(self.node.user.public_key))
+            ):
+            self.validate_button = ttk.Button(master=self,
+                                              text="Validate",
+                                              command=self.try_validate_curr_block,
+                                              bootstyle=(SUCCESS, OUTLINE)
+                                              )
+            self.validate_button.grid(row=2, column=0,
+                                      columnspan=2,
+                                      sticky=(N, E, S, W)
+                                      )
 
         if self.block.previousBlock is not None:
             self.prev_block_button = ttk.Button(master=self,
@@ -401,6 +417,10 @@ class BlockViewer(ttk.Labelframe):
     def try_mine_block(self):
         if self.node.user is not None:
             MineBlockWindow(self, self.node)
+
+    def try_validate_curr_block(self):
+        if self.node.user is not None:
+            ValidateBlockWindow(self, self.node)
 
     def select_prev_block(self):
         self.node.select_prev_block()
@@ -562,6 +582,87 @@ class MineBlockWindow(ttk.Toplevel):
         else:
             self.message.set('Mining.. please wait..')
             self.after(5000, lambda: self.listen_for_complete_task(thread))
+
+
+class ValidateBlockWindow(ttk.Toplevel):
+    def __init__(self, master, node: Node):
+        super().__init__(master,
+                         minsize=(300, 150))
+        self.title("Validate Block")
+        self.master = master
+        self.node = node
+
+        self.password = ttk.StringVar(value="")
+
+        self.create_widgets()
+
+        self.place_window_center()
+        self.focus_force()
+
+    def create_widgets(self):
+        self.authorization_label = ttk.Label(self,
+                                             text="Authorization Required",
+                                             bootstyle=WARNING
+                                             )
+        self.authorization_entry = ttk.Entry(self,
+                                             textvariable=self.password,
+                                             show="*"
+                                             )
+
+        self.validate_button = ttk.Button(self,
+                                          text="Validate",
+                                          command=self.try_validate_curr_block
+                                          )
+        self.cancel_button = ttk.Button(self,
+                                        text="Cancel",
+                                        command=self.destroy
+                                        )
+
+        self.authorization_label.grid(row=0, column=0,
+                                      sticky=(N, W, E, S),
+                                      columnspan=2
+                                      )
+        self.authorization_entry.grid(row=1, column=0,
+                                      sticky=(N, W, E, S),
+                                      columnspan=2
+                                      )
+        self.validate_button.grid(row=2, column=0, sticky=(N, W, E, S))
+        self.cancel_button.grid(row=2, column=1, sticky=(N, W, E, S))
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        for child in self.winfo_children():
+            child.grid_configure(padx=10, pady=10)
+
+    def try_validate_curr_block(self):
+        if (self.node is not None
+                and self.node.curr_block is not None
+            ):
+            result = self.node.validate_block(
+                self.password.get(), self.node.curr_block)
+
+            if result == NodeActionResult.SUCCESS:
+                Messagebox.ok(title="Success",
+                              message=f"Block {self.node.curr_block.id} validated successfully")
+                self.node.save_ledger()
+                self.master.master.update_all_windows()
+                self.destroy()
+            elif result == NodeActionResult.FAIL:
+                Messagebox.show_error(title="Failed",
+                                      message="Block validation failed",
+                                      parent=self)
+            else:
+                Messagebox.show_error(title="Invalid",
+                                      message="Block validation invalid",
+                                      parent=self)
+        else:
+            Messagebox.show_error(title="Invalid",
+                                  message="Block validation invalid",
+                                  parent=self)
 
 
 class MiningThread(Thread):
