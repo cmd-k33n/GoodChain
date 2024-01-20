@@ -163,6 +163,7 @@ class Node:
                     self.save_pool()
                     return NodeActionResult.SUCCESS
             except Exception as e:
+                print(f"Registration failed with exception:\n{e}")
                 return NodeActionResult.FAIL
 
         return NodeActionResult.INVALID
@@ -174,11 +175,11 @@ class Node:
                 self.user = user
                 self.user_wallet = self.get_user_wallet(user)
 
-                # check for validation of the most recently minted block
-                recent_block = self.ledger.get_current_block()
-                while recent_block.previousBlock and recent_block.previousBlock.state() == BlockState.MINED:
-                    self.validate_previous_block(password, recent_block)
-                    recent_block = recent_block.previousBlock
+                # validation of blocks on chain
+                cblock = self.ledger.get_current_block()
+                while (cblock is not None and not cblock.was_validated_by(self.user.get_public_key())):
+                    self.validate_block(password, cblock)
+                    cblock = cblock.previousBlock
 
                 return NodeActionResult.SUCCESS
             else:
@@ -191,20 +192,20 @@ class Node:
         self.user_wallet = None
         return NodeActionResult.SUCCESS
 
-    def validate_previous_block(self, password: str, cblock: CBlock):
-        prev_block = cblock.previousBlock
-        if prev_block and prev_block.state() == BlockState.MINED:
+    def validate_block(self, password: str, cblock: CBlock):
+        if cblock.state() >= BlockState.MINED and self.user.authorize(password):
             try:
                 priv_key, pub_key = self.user.get_rsa_keys(password)
-                if prev_block.validate_block(priv_key, pub_key):
-                    flag = prev_block.get_validation_flag(pub_key)
+                if cblock.validate_block(priv_key, pub_key):
+                    flag = cblock.get_validation_flag(pub_key)
                     broadcast(flag)
                     self.save_ledger()
 
-                    if prev_block.state() == BlockState.VALIDATED:
+                    if cblock.state() == BlockState.VALIDATED and len(cblock.validation_flags) == 3:
+                        # pay reward to miner upon adding third validation flag
                         reward_tx = Tx(REWARD_VALUE, REWARD_VALUE, 0.0,
                                        pub_key,
-                                       decode_public_key(prev_block.mined_by),
+                                       decode_public_key(cblock.mined_by),
                                        REWARD
                                        )
                         reward_tx.sign(priv_key)
@@ -214,7 +215,8 @@ class Node:
                             self.save_pool()
 
                 return NodeActionResult.SUCCESS
-            except:
+            except Exception as e:
+                print(f"Validation failed with exception:\n{e}")
                 return NodeActionResult.FAIL
         return NodeActionResult.INVALID
 
@@ -236,7 +238,8 @@ class Node:
                         # update user wallet
                         self.user_wallet = self.get_user_wallet(self.user)
                         return NodeActionResult.SUCCESS
-            except:
+            except Exception as e:
+                print(f"Mining failed with exception:\n{e}")
                 return NodeActionResult.FAIL
         return NodeActionResult.INVALID
 
@@ -438,7 +441,7 @@ class Node:
                             for key in new_block.txs:
                                 if key in self.pool.txs:
                                     self.pool.pop_tx(key)
-                            self.curr_block = self.ledger.get_current_block()
+                            # self.curr_block = self.ledger.get_current_block()
                             if self.user is not None:
                                 self.user_wallet = self.get_user_wallet(
                                     self.user)
@@ -462,5 +465,5 @@ class Node:
                         print(
                             f"Received unknown object which was ignored: {obj}")
             except Exception as e:
-                print(f"Receiving object failed with error {e}")
+                print(f"Receiving object failed with error:\n{e}")
                 continue
