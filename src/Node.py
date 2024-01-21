@@ -441,7 +441,7 @@ class Node:
                             for key in new_block.txs:
                                 if key in self.pool.txs:
                                     self.pool.pop_tx(key)
-                            # self.curr_block = self.ledger.get_current_block()
+                            self.curr_block = self.ledger.get_current_block()
                             if self.user is not None:
                                 self.user_wallet = self.get_user_wallet(
                                     self.user)
