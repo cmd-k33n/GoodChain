@@ -23,7 +23,7 @@ NODE_PORT = 5050
 
 HEADER_LEN = 64
 FORMAT = 'utf-8'
-SEND_TIMEOUT = 30
+SEND_TIMEOUT = 90
 MAX_CONNECTIONS = 5
 
 # TODO: change print statements to logging statements
@@ -109,7 +109,14 @@ def receive_object(conn: socket.socket, addr: tuple):
     header = conn.recv(HEADER_LEN).decode(FORMAT)  # receive header
     data_len = int(header)  # determine data length
     print(f"[RECEIVING] {data_len} bytes from {addr[0]}:{addr[1]}")
-    data = conn.recv(data_len)  # receive data
+
+    data = b''
+    while len(data) < data_len:
+        packet = conn.recv(data_len - len(data))  # receive data
+        if not packet:
+            break
+        data += packet
+
     obj = pickle.loads(data)  # convert to object
 
     # Send confirmation
