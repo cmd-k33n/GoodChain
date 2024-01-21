@@ -24,7 +24,7 @@ NODE_PORT = 5050
 HEADER_LEN = 64
 FORMAT = 'utf-8'
 SEND_TIMEOUT = 90
-MAX_CONNECTIONS = 5
+MAX_CONNECTIONS = 20
 
 # TODO: change print statements to logging statements
 
@@ -33,7 +33,7 @@ NODES = {"goodchain_node_1", "goodchain_node_2",
          "goodchain_node_3", "goodchain_node_4"}
 
 # Could do something like this to get nodes from a server
-# NODES = socket.request("https://www.goodchain.com/nodes").json()
+# NODES = socket.request("https://broadcast.goodchain.org/").json()
 
 CONFIRM_MSG = "Object received"
 CONFIRM_MSG_LEN = len(CONFIRM_MSG.encode(FORMAT))
@@ -99,7 +99,8 @@ def send_object(recv_ip: str, recv_port: int, obj: object):
         print(f"{recv_ip}:{recv_port} says: {s.recv(CONFIRM_MSG_LEN).decode(FORMAT)}")
 
     except OSError as e:
-        print(e)
+        print(
+            f"Sending {obj} to {recv_ip}:{recv_port} failed with error:\n{e}")
     finally:
         s.close()
 
@@ -134,9 +135,13 @@ def broadcast(obj: object):
     for node in NODES:
         # spin thread for each sending port and add to queue
         # Not a daemon so all transmissions complete before main thread exits in case the application is closed when sending.
-        node_ip = socket.gethostbyname(node)
-        if NODE_IP != node_ip:
-            # Don't send to self
-            t = Thread(target=send_object, args=(
-                node_ip, NODE_PORT, obj), daemon=False)
-            t.start()
+        try:
+            node_ip = socket.gethostbyname(node)
+            if NODE_IP != node_ip:
+                # Don't send to self
+                t = Thread(target=send_object, args=(
+                    node_ip, NODE_PORT, obj), daemon=False)
+                t.start()
+        except Exception as e:
+            print(f"Opening connection to {node} failed with error:\n{e}")
+            continue

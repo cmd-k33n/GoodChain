@@ -56,12 +56,13 @@ import pickle
 from queue import Queue
 from threading import Thread
 from typing import NamedTuple
+from time import sleep
 from src.Data import Accounts, Ledger, Pool, compose_relative_filepath
 from src.BlockChain import *
 from src.Transaction import Tx, REWARD, REWARD_VALUE, NORMAL
 from src.Signature import generate_keys, encode_keys
 from src.User import User
-from src.SocketUtil import start_listening_thread, broadcast, received_objects, NODE_HOSTNAME, NODE_PORT, NODE_IP
+from src.SocketUtil import NODES, send_object, start_listening_thread, broadcast, received_objects, NODE_PORT, NODE_IP
 
 
 class NodeActionResult(Enum):
@@ -103,6 +104,9 @@ class Node:
         start_listening_thread()
         # launch object receiver
         self.__start_receiving_objects()
+        # launch sync with peers
+        self.node_summaries = dict[str, NodeSummary]()
+        self.__start_syncing_with_peers()
 
     def save_all(self):
         self.acc_hash = self.accounts.save()
@@ -461,9 +465,118 @@ class Node:
                         else:
                             print(
                                 f"Received and rejected validation flag for block: {flag.block_id} from {flag.public_key.hex()}")
+                    case NodeSummary() as summary:
+                        # Update other node's summary
+                        print(
+                            f"Received summary from {summary.node_ip}\n{summary}")
+                        self.node_summaries[summary.node_ip] = summary
+
+                    case NodeSyncRequest() as request:
+                        # no requested items, send own summary
+                        if request.block_id is None and request.user is None and request.tx_hash is None:
+                            print(
+                                f"Received sync request from node: {request}")
+                            send_object(request.node_ip, NODE_PORT,
+                                        self.__get_summary())
+
+                        elif request.block_id is not None:
+                            print(
+                                f"Received block request from node: {request}")
+                            # send block
+                            send_object(request.node_ip, NODE_PORT,
+                                        self.ledger.get_block_by_id(request.block_id))
+                        elif request.user is not None:
+                            print(
+                                f"User {request.user} requested by node: {request}")
+                            # send user
+                            send_object(request.node_ip, NODE_PORT,
+                                        self.accounts.get_user(request.user))
+                        elif request.tx_hash is not None:
+                            print(
+                                f"Tx {request.tx_hash} requested by node: {request}")
+                            # send tx
+                            send_object(request.node_ip, NODE_PORT,
+                                        self.pool.get_tx(request))
                     case _:
                         print(
                             f"Received unknown object which was ignored: {obj}")
             except Exception as e:
                 print(f"Receiving object failed with error:\n{e}")
                 continue
+
+    def __start_syncing_with_peers(self):
+        # spin thread to sync with peers
+        t = Thread(target=self.__sync_up_with_peers, daemon=True)
+        t.start()
+
+    def __sync_up_with_peers(self):
+        # entry point to ask peers for their ledger and pool summary, compare them to own, pick best peer, then send requests to update own ledger and pool
+        # self.node_summaries.clear()
+        sleep(10)  # wait for network interface to start and GUI to load
+
+        print(f"Node {NODE_IP} started syncing with peers...")
+
+        broadcast(NodeSyncRequest())
+
+        own_summary = self.__get_summary()
+
+        while len(self.node_summaries) < len(NODES)-1:
+            # wait for all summaries from peers
+            sleep(2)
+
+        # pick best peer
+        longest_chain = own_summary.node_ip, own_summary.head_id
+        missing_users = dict()  # key: username, value = node ip (first found)
+        missing_txs = dict()  # key: tx hash, value = node ip (first found)
+
+        for summary in self.node_summaries.values():
+            if summary.head_id > longest_chain[1]:
+                longest_chain = summary.node_ip, summary.head_id
+
+                for tx_hash in summary.txs:
+                    # bring missing txs from longest chain
+                    if tx_hash not in own_summary.txs and tx_hash not in missing_txs:
+                        missing_txs.update({tx_hash: summary.node_ip})
+
+            for user in summary.users:
+                if user not in own_summary.users and user not in missing_users:
+                    missing_users.update({user: summary.node_ip})
+
+        # send requests to update own ledger
+        if longest_chain[0] != own_summary.node_ip and longest_chain[1] > own_summary.head_id:
+            # request blocks from longest chain
+            for i in range(own_summary.head_id, longest_chain[1]):
+                print(f"Requesting block #{i} from {longest_chain[0]}")
+                send_object(longest_chain[0], NODE_PORT,
+                            NodeSyncRequest(block_id=i))
+
+        # request missing users
+        for user, node_ip in missing_users.items():
+            print(f"Requesting user {user} from {node_ip}")
+            send_object(node_ip, NODE_PORT, NodeSyncRequest(user=user))
+
+        # request missing txs
+        for tx_hash, node_ip in missing_txs.items():
+            print(f"Requesting tx {tx_hash} from {node_ip}")
+            send_object(node_ip, NODE_PORT, NodeSyncRequest(tx_hash=tx_hash))
+
+        print(f"Node {NODE_IP} finished syncing with peers.")
+
+    def __get_summary(self):
+        txs = {tx_hash for tx_hash in self.pool.txs.keys()}
+        users = {username for username in self.accounts.users.keys()}
+        return NodeSummary(self.ledger.head.id, txs, users)
+
+
+class NodeSummary(NamedTuple):
+    head_id: int
+    txs: set[str]
+    users: set[str]
+    node_ip: str = NODE_IP
+
+
+class NodeSyncRequest(NamedTuple):
+    block_id: int = None
+    user: str = None
+    tx_hash: str = None
+    node_ip: str = NODE_IP
