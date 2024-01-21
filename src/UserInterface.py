@@ -341,7 +341,7 @@ class BlockViewer(ttk.Labelframe):
                                  arcrange=180,
                                  arcoffset=180,
                                  subtext=f"{len(self.block.validation_flags)}" + ("/3 Flags" if len(
-                                     self.block.validation_flags) <= 3 else "/10 Flags" if len(self.block.validation_flags) <= 10 else "/100 Flags")
+                                     self.block.validation_flags) <= 3 else " Flags")
                                  )
 
         if self.node.user is not None and self.block.state() == BlockState.READY:
@@ -356,8 +356,8 @@ class BlockViewer(ttk.Labelframe):
                                   )
 
         if (self.node.user is not None
-                and self.block.state() >= BlockState.MINED
-                and not self.block.was_validated_by(decode_public_key(self.node.user.public_key))
+            and self.block.state() >= BlockState.MINED
+            and not self.block.was_validated_by(decode_public_key(self.node.user.public_key))
             ):
             self.validate_button = ttk.Button(master=self,
                                               text="Validate",
@@ -476,8 +476,9 @@ class MineBlockWindow(ttk.Toplevel):
         container = ttk.Frame(self)
         container.grid(row=0, column=0,
                        sticky=(N, E, S, W),
-                       padx=40, pady=40)
+                       padx=20, pady=20)
         self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
         self.main_label = ttk.Label(container,
                                     text=f"Click the START button to begin mining block {self.node.curr_block.id} \n" +
@@ -544,7 +545,9 @@ class MineBlockWindow(ttk.Toplevel):
 
         container.columnconfigure(0, weight=1)
         container.columnconfigure(1, weight=1)
-        container.rowconfigure(0, weight=1)
+
+        for r in range(6):
+            container.rowconfigure(r, weight=1)
 
         for child in container.winfo_children():
             child.grid_configure(padx=5, pady=5)
@@ -569,8 +572,10 @@ class MineBlockWindow(ttk.Toplevel):
             result = thread.join()
             if result == NodeActionResult.SUCCESS:
                 self.message.set('Block successfully mined')
+                self.message_label.configure(bootstyle=SUCCESS)
                 self.progressbar.configure(bootstyle=SUCCESS)
                 self.master.master.update_all_windows()
+                self.after(2000, self.destroy)
             elif result == NodeActionResult.FAIL:
                 self.message.set('Mining attempt failed')
                 self.progressbar.configure(bootstyle=DANGER)
@@ -593,16 +598,17 @@ class ValidateBlockWindow(ttk.Toplevel):
         self.node = node
 
         self.password = ttk.StringVar(value="")
+        self.message = ttk.StringVar(value="")
 
         self.create_widgets()
-
         self.place_window_center()
         self.focus_force()
 
     def create_widgets(self):
         self.authorization_label = ttk.Label(self,
                                              text="Authorization Required",
-                                             bootstyle=WARNING
+                                             bootstyle=WARNING,
+                                             justify=CENTER
                                              )
         self.authorization_entry = ttk.Entry(self,
                                              textvariable=self.password,
@@ -611,12 +617,20 @@ class ValidateBlockWindow(ttk.Toplevel):
 
         self.validate_button = ttk.Button(self,
                                           text="Validate",
-                                          command=self.try_validate_curr_block
+                                          command=self.try_validate_curr_block,
+                                          bootstyle=(SUCCESS, OUTLINE)
                                           )
         self.cancel_button = ttk.Button(self,
                                         text="Cancel",
-                                        command=self.destroy
+                                        command=self.destroy,
+                                        bootstyle=(DANGER, OUTLINE)
                                         )
+
+        self.message_label = ttk.Label(self,
+                                       textvariable=self.message,
+                                       bootstyle=WARNING,
+                                       justify=CENTER
+                                       )
 
         self.authorization_label.grid(row=0, column=0,
                                       sticky=(N, W, E, S),
@@ -628,41 +642,43 @@ class ValidateBlockWindow(ttk.Toplevel):
                                       )
         self.validate_button.grid(row=2, column=0, sticky=(N, W, E, S))
         self.cancel_button.grid(row=2, column=1, sticky=(N, W, E, S))
+        self.message_label.grid(row=3, column=0,
+                                columnspan=2,
+                                sticky=(N)
+                                )
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
         self.grid_rowconfigure(2, weight=1)
+        self.grid_rowconfigure(3, weight=1)
 
         for child in self.winfo_children():
             child.grid_configure(padx=10, pady=10)
 
     def try_validate_curr_block(self):
-        if (self.node is not None
-                and self.node.curr_block is not None
-            ):
-            result = self.node.validate_block(
-                self.password.get(), self.node.curr_block)
+        self.validate_button.configure(state=DISABLED)
+        result = self.node.validate_block(self.password.get(),
+                                          self.node.curr_block)
 
-            if result == NodeActionResult.SUCCESS:
-                Messagebox.ok(title="Success",
-                              message=f"Block {self.node.curr_block.id} validated successfully")
-                self.node.save_ledger()
-                self.master.master.update_all_windows()
-                self.destroy()
-            elif result == NodeActionResult.FAIL:
-                Messagebox.show_error(title="Failed",
-                                      message="Block validation failed",
-                                      parent=self)
-            else:
-                Messagebox.show_error(title="Invalid",
-                                      message="Block validation invalid",
-                                      parent=self)
+        if result == NodeActionResult.SUCCESS:
+            self.message.set(
+                f"Block {self.node.curr_block.id} validated successfully")
+            self.message_label.configure(bootstyle=SUCCESS)
+            self.node.save_ledger()
+            self.master.master.update_all_windows()
+            self.after(2000, self.destroy)
+        elif result == NodeActionResult.FAIL:
+            self.message.set(
+                f"Block {self.node.curr_block.id} validation attempt failed!")
+            self.validate_button.configure(state=NORMAL)
+            self.after(2000, self.message.set, "")
         else:
-            Messagebox.show_error(title="Invalid",
-                                  message="Block validation invalid",
-                                  parent=self)
+            self.message.set(
+                f"Block {self.node.curr_block.id} validation attempt invalid")
+            self.validate_button.configure(state=NORMAL)
+            self.after(2000, self.message.set, "")
 
 
 class MiningThread(Thread):
@@ -965,6 +981,7 @@ class CreateTxWindow(ttk.Toplevel):
         self.fee = ttk.IntVar(value=0)
         self.recipient = ttk.StringVar(value="")
         self.password = ttk.StringVar(value="")
+        self.message = ttk.StringVar(value="")
 
         self.create_widgets()
 
@@ -995,12 +1012,20 @@ class CreateTxWindow(ttk.Toplevel):
 
         self.create_button = ttk.Button(self,
                                         text="Create",
-                                        command=self.create_tx
+                                        command=self.create_tx,
+                                        bootstyle=(SUCCESS, OUTLINE)
                                         )
         self.cancel_button = ttk.Button(self,
                                         text="Cancel",
-                                        command=self.destroy
+                                        command=self.destroy,
+                                        bootstyle=(DANGER, OUTLINE)
                                         )
+
+        self.message_label = ttk.Label(self,
+                                       textvariable=self.message,
+                                       bootstyle=WARNING,
+                                       justify=CENTER
+                                       )
 
         self.to_label.grid(row=0, column=0, sticky=(N, W, E, S))
         self.to_entry.grid(row=0, column=1, sticky=(N, W, E, S))
@@ -1016,41 +1041,41 @@ class CreateTxWindow(ttk.Toplevel):
         self.authorization_entry.grid(row=5, column=1, sticky=(N, W, E, S))
         self.create_button.grid(row=6, column=0, sticky=(N, W, E, S))
         self.cancel_button.grid(row=6, column=1, sticky=(N, W, E, S))
+        self.message_label.grid(
+            row=7, column=0, columnspan=2, sticky=(N))
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=1)
+
+        for r in range(8):
+            self.grid_rowconfigure(r, weight=1)
 
         for child in self.winfo_children():
             child.grid_configure(padx=5, pady=5)
 
     def create_tx(self):
-        # and self.node.user.authorize(self.password.get()):
-        if self.node is not None and self.node.user is not None:
-            receiver = self.node.accounts.get_user(self.recipient.get())
+        self.create_button.configure(state=DISABLED)
 
-            result = self.node.create_tx(self.input.get(),
-                                         self.output.get(),
-                                         self.fee.get(),
-                                         self.password.get(),
-                                         receiver.get_public_key() if receiver is not None else None
-                                         )
-            if result == NodeActionResult.SUCCESS:
-                Messagebox.ok(title="Success",
-                              message="Transaction created successfully")
-                self.master.master.update_all_windows()
-                self.destroy()
-            elif result == NodeActionResult.FAIL:
-                Messagebox.show_error(title="Failed",
-                                      message="Transaction creation failed",
-                                      parent=self)
-            else:
-                Messagebox.show_error(title="Invalid",
-                                      message="Transaction invalid",
-                                      parent=self)
+        receiver = self.node.accounts.get_user(self.recipient.get())
+
+        result = self.node.create_tx(self.input.get(),
+                                     self.output.get(),
+                                     self.fee.get(),
+                                     self.password.get(),
+                                     receiver.get_public_key() if receiver is not None else None
+                                     )
+
+        if result == NodeActionResult.SUCCESS:
+            self.message.set("Transaction created successfully")
+            self.message_label.configure(bootstyle=SUCCESS)
+            self.master.master.update_all_windows()
+            self.after(2000, self.destroy)
+        elif result == NodeActionResult.FAIL:
+            self.message.set("Transaction creation failed")
+            self.create_button.configure(state=NORMAL)
         else:
-            Messagebox.show_error(title="Invalid",
-                                  message="Transaction invalid",
-                                  parent=self)
+            self.message.set("Transaction invalid")
+            self.create_button.configure(state=NORMAL)
 
 
 class Login(ttk.Labelframe):
