@@ -475,28 +475,28 @@ class Node:
                         # no requested items, send own summary
                         if request.block_id is None and request.user is None and request.tx_hash is None:
                             print(
-                                f"Received sync request from node: {request}")
+                                f"Received sync request from node: {request.node_ip}")
                             send_object(request.node_ip, NODE_PORT,
                                         self.__get_summary())
 
                         elif request.block_id is not None:
                             print(
-                                f"Received block request from node: {request}")
+                                f"Received block request from node: {request.node_ip}")
                             # send block
                             send_object(request.node_ip, NODE_PORT,
                                         self.ledger.get_block_by_id(request.block_id))
                         elif request.user is not None:
                             print(
-                                f"User {request.user} requested by node: {request}")
+                                f"User {request.user} requested by node: {request.node_ip}")
                             # send user
                             send_object(request.node_ip, NODE_PORT,
                                         self.accounts.get_user(request.user))
                         elif request.tx_hash is not None:
                             print(
-                                f"Tx {request.tx_hash} requested by node: {request}")
+                                f"Tx {request.tx_hash} requested by node: {request.node_ip}")
                             # send tx
                             send_object(request.node_ip, NODE_PORT,
-                                        self.pool.get_tx(request))
+                                        self.pool.get_tx(request.tx_hash))
                     case _:
                         print(
                             f"Received unknown object which was ignored: {obj}")
@@ -530,7 +530,7 @@ class Node:
         missing_txs = dict()  # key: tx hash, value = node ip (first found)
 
         for summary in self.node_summaries.values():
-            if summary.head_id > longest_chain[1]:
+            if summary.head_id >= longest_chain[1]:
                 longest_chain = summary.node_ip, summary.head_id
 
                 for tx_hash in summary.txs:
